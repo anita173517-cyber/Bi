@@ -1,0 +1,58 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Locate Project Root and Build APK
+        run: |
+          echo "Searching for Android project root..."
+          PROJECT_DIR=""
+          
+          # Check if build.gradle or settings.gradle exists in current or subdirectories
+          if [ -f "settings.gradle.kts" ] || [ -f "settings.gradle" ]; then
+            PROJECT_DIR="."
+          else
+            # Find the directory containing settings.gradle
+            FOUND_DIR=$(find . -maxdepth 3 -name "settings.gradle*" -exec dirname {} \; | head -n 1)
+            if [ -n "$FOUND_DIR" ]; then
+              PROJECT_DIR="$FOUND_DIR"
+            fi
+          fi
+          
+          echo "Found project directory: $PROJECT_DIR"
+          cd "$PROJECT_DIR"
+          
+          # Setup gradle wrapper if missing
+          if [ ! -f "./gradlew" ]; then
+            echo "Generating Gradle wrapper..."
+            gradle wrapper
+          fi
+          
+          chmod +x gradlew
+          echo "Building signed release APK..."
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Upload Built APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk
+          path: '**/build/outputs/apk/release/*.apk'
+          
